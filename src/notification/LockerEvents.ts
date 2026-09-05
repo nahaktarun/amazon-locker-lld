@@ -1,11 +1,15 @@
 import { Customer } from '../model/Customer.js';
 import { LockerPackage } from '../model/LockerPackage.js';
+import { ReturnPackage } from '../model/ReturnPackage.js';
 
 /** Observer: the service emits; subscribers (notifications, metrics, audit) listen. The service never knows who. */
 export interface LockerEventMap {
   PackageDelivered: { lockerPackage: LockerPackage; customer: Customer };
   PackagePickedUp: { lockerPackage: LockerPackage; customer: Customer };
   PackageExpired: { lockerPackage: LockerPackage; customer: Customer; refundCents: number };
+  ReturnRequested: { ret: ReturnPackage; customer: Customer };
+  ReturnDropped: { ret: ReturnPackage; customer: Customer };
+  ReturnCollected: { ret: ReturnPackage; customer: Customer; refundCents: number };
 }
 export type Listener<K extends keyof LockerEventMap> = (payload: LockerEventMap[K]) => void;
 

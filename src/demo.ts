@@ -38,4 +38,14 @@ clock.set(new Date('2026-09-11T08:59:00')); show('sweep at 3d - 1min:', (await s
 clock.set(new Date('2026-09-11T09:00:00')); show('sweep at exactly 3d:', (await service.processExpired(id => customers[id]!)).map(x => `${x.id} → ${x.status}`));
 show('locker after removal:', (await lockers.get(lp2!.lockerId)).state);
 
+console.log('\n— R11/R12 · Return: customer code to drop, logistics code to collect, refund per product');
+const ret = await service.requestReturn(asha, order, headphones, loc.id);
+show('return locker / customer code:', `${ret.lockerId} / ${ret.customerCode}`);
+await service.dropReturn(loc.id, ret.customerCode!.value, asha);
+show('after drop:', `${ret.status}, logistics code ${ret.logisticsCode}`);
+await service.collectReturn(loc.id, ret.logisticsCode!.value, asha);
+show('after collection:', `${ret.status}, locker ${(await lockers.get(ret.lockerId)).state}`);
+const ret2 = await service.requestReturn(vikram, new Order('ORD-4', vikram, [monitor], loc.id), monitor, loc.id);
+await service.dropReturn(loc.id, ret2.customerCode!.value, vikram);
+await service.collectReturn(loc.id, ret2.logisticsCode!.value, vikram);
 console.log();

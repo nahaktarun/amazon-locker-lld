@@ -4,7 +4,7 @@ import { CustomerNotifier } from './notification/CustomerNotifier.js';
 import { LockerEvents } from './notification/LockerEvents.js';
 import { EmailChannel, NotificationChannel } from './notification/Notification.js';
 import { InMemoryLockerRepository } from './repository/LockerRepository.js';
-import { InMemoryLockerPackageRepository } from './repository/PackageRepositories.js';
+import { InMemoryLockerPackageRepository, InMemoryReturnRepository } from './repository/PackageRepositories.js';
 import { LockerService } from './service/LockerService.js';
 import { PackagingService } from './service/PackagingService.js';
 import { AtomicLockerAssigner } from './strategy/LockerAssigner.js';
@@ -19,6 +19,7 @@ export function buildLockerSystem(opts: { locations: LockerLocation[]; clock: Cl
     new Map(opts.locations.map(l => [l.id, l])),
     lockers,
     new InMemoryLockerPackageRepository(),
+    new InMemoryReturnRepository(),
     new AtomicLockerAssigner(lockers, new SmallestFitStrategy()),
     new PackagingService(),
     opts.codes ?? new SixDigitCodeGenerator(),

@@ -1,11 +1,13 @@
 import { AccessCode, CodeGenerator } from '../model/AccessCode.js';
 import { Customer } from '../model/Customer.js';
+import { Item } from '../model/Item.js';
 import { InvalidCodeError, LockerPackage } from '../model/LockerPackage.js';
 import { LockerLocation } from '../model/LockerLocation.js';
 import { Order } from '../model/Order.js';
+import { ReturnPackage, ReturnStatus } from '../model/ReturnPackage.js';
 import { LockerEvents } from '../notification/LockerEvents.js';
 import { LockerRepository } from '../repository/LockerRepository.js';
-import { LockerPackageRepository } from '../repository/PackageRepositories.js';
+import { LockerPackageRepository, ReturnRepository } from '../repository/PackageRepositories.js';
 import { LockerAssigner } from '../strategy/LockerAssigner.js';
 import { Clock } from '../util/Clock.js';
 import { PackagingService } from './PackagingService.js';
@@ -14,11 +16,11 @@ export class LocationClosedError extends Error {
   constructor(loc: LockerLocation) { super(`${loc.name} is closed now (open ${loc.hours})`); this.name = 'LocationClosedError'; }
 }
 
-/** How long a code lives. R6: three days for deliveries. */
+/** How long a code lives. R6: three days for deliveries. Returns get the same window unless told otherwise. */
 export const THREE_DAYS_MS = 3 * 24 * 3_600_000;
 
 /**
- * Facade over the delivery flow. Sequences the steps; owns no rules of its own.
+ * Facade over the whole flow. Sequences the steps; owns no rules of its own.
  * No `new Date()`, no status strings, no email, no locker state writes: those live in the collaborators.
  */
 export class LockerService {
@@ -28,6 +30,7 @@ export class LockerService {
     private readonly locations: Map<string, LockerLocation>,
     private readonly lockers: LockerRepository,
     private readonly lockerPackages: LockerPackageRepository,
+    private readonly returns: ReturnRepository,
     private readonly assigner: LockerAssigner,
     private readonly packaging: PackagingService,
     private readonly codes: CodeGenerator,
@@ -94,6 +97,45 @@ export class LockerService {
       expired.push(lp);
     }
     return expired;
+  }
+
+  // ── Return flow ──────────────────────────────────────────────────────────────
+
+  /** R11: assign a locker at the chosen location for the return; send the customer a code to open it. */
+  async requestReturn(customer: Customer, order: Order, item: Item, locationId: string): Promise<ReturnPackage> {
+    if (!order.items.includes(item)) throw new Error(`${item.name} is not part of order ${order.id}`);
+    const location = this.location(locationId);
+    const id = `RET-${String(++this.seq).padStart(4, '0')}`;
+    const locker = await this.assigner.assign(location.id, item.dimensions, id);
+    const now = this.clock.now();
+    const code = (at: Date) => new AccessCode(this.codes.next(), new Date(at.getTime() + this.holdMs));
+    const ret = new ReturnPackage(id, item, order.id, customer.id, locker.id, location.id, code(now), code);
+    await this.returns.save(ret);
+    this.events.emit('ReturnRequested', { ret, customer });
+    return ret;
+  }
+
+  /** R11: customer opens the locker with their code and drops the item. A logistics code is issued. */
+  async dropReturn(locationId: string, code: string, customer: Customer): Promise<ReturnPackage> {
+    const location = this.location(locationId);
+    const now = this.clock.now();
+    if (!location.isOpenAt(now)) throw new LocationClosedError(location);
+    const ret = (await this.returns.findByStatus(locationId, ReturnStatus.REQUESTED)).find(r => r.customerCode?.matches(code));
+    if (!ret) throw new InvalidCodeError();
+    ret.drop(code, now);
+    await this.lockers.occupy(ret.lockerId);
+    this.events.emit('ReturnDropped', { ret, customer });
+    return ret;
+  }
+
+  /** R12: logistics collects with its own code; the locker is released and the refund policy applied. */
+  async collectReturn(locationId: string, code: string, customer: Customer): Promise<ReturnPackage> {
+    const ret = (await this.returns.findByStatus(locationId, ReturnStatus.DROPPED)).find(r => r.logisticsCode?.matches(code));
+    if (!ret) throw new InvalidCodeError();
+    ret.collect(code, this.clock.now());
+    await this.lockers.release(ret.lockerId);
+    this.events.emit('ReturnCollected', { ret, customer, refundCents: ret.item.returnable ? ret.item.priceCents : 0 });
+    return ret;
   }
 
   private location(id: string): LockerLocation {
