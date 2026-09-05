@@ -1,0 +1,10 @@
+stateDiagram-v2
+  [*] --> BOOKED: locker assigned at dispatch
+  BOOKED --> DELIVERED: deliver(now) · code issued, validTill = now + 3d
+  BOOKED --> REMOVED: never delivered
+  DELIVERED --> PICKED_UP: pickUp(code) · right code, in time · code destroyed
+  DELIVERED --> DELIVERED: pickUp(wrong code) · rejected
+  DELIVERED --> EXPIRED: expire(now) · now ≥ validTill
+  EXPIRED --> REMOVED: remove() · locker released, refund
+  PICKED_UP --> [*]
+  REMOVED --> [*]

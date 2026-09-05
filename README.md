@@ -54,7 +54,7 @@ src/notification/  LockerEvents (observer), NotificationChannel adapters, Custom
 src/service/       PackagingService (R2), LockerService facade (all flows)
 src/util/          Clock
 src/container.ts   composition root
-docs/              decks and diagrams
+docs/              student deck (index.html) and Mermaid diagrams
 ```
 
 ### Design patterns

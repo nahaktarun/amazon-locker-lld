@@ -9,8 +9,7 @@
     
     "race": "tsx src/race-demo.ts",
     "test": "tsx --test tests/*.test.ts",
-    "typecheck": "tsc --noEmit",
-    "deck": "node docs/build.cjs"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

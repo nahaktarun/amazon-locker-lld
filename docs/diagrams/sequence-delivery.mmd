@@ -1,0 +1,27 @@
+sequenceDiagram
+  autonumber
+  participant F as Fulfilment
+  participant S as LockerService
+  participant P as PackagingService
+  participant A as LockerAssigner
+  participant R as LockerRepository
+  participant C as Carrier
+  participant E as LockerEvents
+  participant N as CustomerNotifier
+  F->>S: assignLockers(order)
+  S->>P: pack(order)
+  P-->>S: Package[] (R2, R4)
+  loop each package
+    S->>A: assign(location, dims, lockerPackageId)
+    A->>R: findAvailable(location)
+    A->>R: book(lockerId, version, id)  %% compare-and-set (R9)
+    R-->>A: true / false → next candidate
+    A-->>S: Locker (BOOKED)
+  end
+  S-->>F: LockerPackage[] (BOOKED)
+  C->>S: deliver(lockerPackageId)
+  S->>S: lockerPackage.deliver(now) → code, validTill = now + 3d (R5, R6)
+  S->>R: occupy(lockerId)
+  S->>E: emit PackageDelivered
+  E->>N: PackageDelivered
+  N-->>F: email: locker, code, deadline

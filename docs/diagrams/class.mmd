@@ -1,0 +1,100 @@
+classDiagram
+  direction LR
+  class LockerLocation {
+    +id
+    +name
+    +hours: OperatingHours
+    +lockers: Locker[]
+    +isOpenAt(when) bool
+  }
+  class Locker {
+    +id
+    +size: LockerSize
+    +state: LockerState
+    +assignedTo
+    +version
+  }
+  class LockerSize {
+    <<enumeration>>
+    XS S M L XL XXL
+  }
+  class LockerState {
+    <<enumeration>>
+    AVAILABLE BOOKED OCCUPIED OUT_OF_SERVICE
+  }
+  class Order {
+    +id
+    +customer
+    +items: Item[]
+    +lockerLocationId
+  }
+  class Package {
+    +id
+    +items: Item[]
+    +dimensions
+  }
+  class LockerPackage {
+    -state: LockerPackageState
+    -code: AccessCode
+    +deliver(now)
+    +pickUp(code, now)
+    +expire(now)
+    +remove()
+  }
+  class ReturnPackage {
+    -customerCode
+    -logisticsCode
+    +drop(code, now)
+    +collect(code, now)
+  }
+  class AccessCode {
+    +value
+    +validTill
+    +matches(input) bool
+  }
+  class LockerService {
+    +assignLockers(order)
+    +deliver(id)
+    +pickUp(location, code)
+    +processExpired()
+    +requestReturn(...)
+    +dropReturn(...)
+    +collectReturn(...)
+  }
+  class LockerRepository {
+    <<interface>>
+    +findAvailable(location)
+    +book(id, version, to) bool
+    +occupy(id)
+    +release(id)
+  }
+  class LockerAssignmentStrategy {
+    <<interface>>
+    +rank(available, dims)
+  }
+  class LockerEvents {
+    +on(event, listener)
+    +emit(event, payload)
+  }
+  class NotificationChannel {
+    <<interface>>
+    +send(customer, subject, body)
+  }
+  LockerLocation *-- Locker
+  Locker --> LockerSize
+  Locker --> LockerState
+  Order --> Package : packed into
+  LockerPackage --> Package
+  LockerPackage --> AccessCode
+  LockerPackage ..> Locker : by id
+  ReturnPackage --> AccessCode
+  ReturnPackage ..> Locker : by id
+  LockerService --> LockerRepository
+  LockerService --> LockerAssignmentStrategy
+  LockerService --> LockerEvents
+  LockerService ..> LockerPackage : creates
+  LockerService ..> ReturnPackage : creates
+  LockerEvents ..> NotificationChannel : via CustomerNotifier
+  SmallestFitStrategy ..|> LockerAssignmentStrategy
+  InMemoryLockerRepository ..|> LockerRepository
+  EmailChannel ..|> NotificationChannel

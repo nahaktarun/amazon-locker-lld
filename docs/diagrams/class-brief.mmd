@@ -1,0 +1,16 @@
+classDiagram
+  direction LR
+  class LockerLocation { +hours +lockers +isOpenAt(when) }
+  class Locker { +size +state +version }
+  class Order { +customer +items +lockerLocationId }
+  class Package { +items +dimensions }
+  class LockerPackage { -code +deliver() +pickUp(code) +expire() }
+  class ReturnPackage { -customerCode -logisticsCode +drop(code) +collect(code) }
+  class LockerService { +assignLockers() +deliver() +pickUp() +processExpired() +requestReturn() }
+  LockerLocation *-- Locker
+  Order --> Package : packed into
+  LockerPackage --> Package
+  LockerPackage ..> Locker
+  ReturnPackage ..> Locker
+  LockerService ..> LockerPackage
+  LockerService ..> ReturnPackage

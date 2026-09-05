@@ -1,0 +1,28 @@
+flowchart LR
+  customer([Customer])
+  carrier([Delivery carrier])
+  logistics([Logistics team])
+  clock([Scheduler])
+  subgraph system[Amazon Locker Service]
+    uc1(Select locker location at checkout)
+    uc2(Assign locker to package)
+    uc3(Deliver package, issue code)
+    uc4(Pick up package with code)
+    uc5(Expire uncollected package, refund)
+    uc6(Request return, get drop code)
+    uc7(Drop return in locker)
+    uc8(Collect return, process refund)
+    uc9(Notify customer)
+  end
+  customer --> uc1
+  uc1 -.includes.-> uc2
+  carrier --> uc3
+  uc3 -.includes.-> uc9
+  customer --> uc4
+  clock --> uc5
+  uc5 -.includes.-> uc9
+  customer --> uc6
+  uc6 -.includes.-> uc2
+  customer --> uc7
+  logistics --> uc8
+  uc8 -.includes.-> uc9

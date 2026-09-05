@@ -1,0 +1,23 @@
+sequenceDiagram
+  autonumber
+  participant Cu as Customer (kiosk)
+  participant S as LockerService
+  participant L as LockerLocation
+  participant PR as LockerPackageRepository
+  participant LP as LockerPackage
+  participant R as LockerRepository
+  participant E as LockerEvents
+  Cu->>S: pickUp(location, code)
+  S->>L: isOpenAt(now)? (R7)
+  alt closed
+    S-->>Cu: LocationClosedError
+  end
+  S->>PR: findDelivered(location)
+  S->>S: find package whose code matches (constant time)
+  alt no match
+    S-->>Cu: InvalidCodeError
+  end
+  S->>LP: pickUp(code, now)  %% state DELIVERED → PICKED_UP, code destroyed (R10)
+  S->>R: release(lockerId)  %% locker AVAILABLE again
+  S->>E: emit PackagePickedUp
+  S-->>Cu: door opens

@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Node.js Backend Track, LLD case study: the Amazon Locker service. Requirements R1-R12, use case, class, sequence and activity diagrams, code one commit per design step, and the most-asked LLD interview questions.">
+<title>Amazon Locker Service · LLD Case Study</title>
+<style>
+:root {
+  --paper: #F4F5F6; --surface: #FFFFFF; --ink: #151A21; --ink-2: #58616D; --ink-3: #8C949F;
+  --rule: #DCDFE4; --rule-2: #EAECEF; --accent: #22548F; --accent-soft: #E7EDF6;
+  --red: #A93226; --green: #2E6B4F; --amber: #8A5A00; --amber-soft: #F6EEDC;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --serif: Charter, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #14181E; --surface: #1A1F27; --ink: #E3E7EB; --ink-2: #98A1AC; --ink-3: #6A737E;
+    --rule: #2A313B; --rule-2: #222932; --accent: #85AAD9; --accent-soft: #1E2833;
+    --red: #DF7C70; --green: #6FB48F; --amber: #D9A85A; --amber-soft: #2A2418;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #14181E; --surface: #1A1F27; --ink: #E3E7EB; --ink-2: #98A1AC; --ink-3: #6A737E;
+  --rule: #2A313B; --rule-2: #222932; --accent: #85AAD9; --accent-soft: #1E2833;
+  --red: #DF7C70; --green: #6FB48F; --amber: #D9A85A; --amber-soft: #2A2418;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+.deck { position: relative; min-height: 100dvh; display: flex; flex-direction: column; }
+.topbar, .botbar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.9rem clamp(1rem, 4vw, 2.75rem); font-size: 0.72rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); }
+.topbar { border-bottom: 1px solid var(--rule-2); }
+.botbar { border-top: 1px solid var(--rule-2); }
+.brand { font-weight: 600; color: var(--ink-2); }
+.clock { font-family: var(--mono); letter-spacing: 0.04em; color: var(--accent); font-variant-numeric: tabular-nums; }
+.stage { flex: 1 1 auto; position: relative; overflow: hidden; }
+
+.slide { position: absolute; inset: 0; overflow-y: auto; padding: clamp(1.5rem, 5vh, 3.25rem) clamp(1rem, 4vw, 2.75rem);
+  opacity: 0; visibility: hidden; transform: translateY(6px); transition: opacity 180ms ease, transform 180ms ease, visibility 180ms; }
+.slide.active { opacity: 1; visibility: visible; transform: none; }
+.slide > .inner { max-width: 66rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+@media (prefers-reduced-motion: reduce) { .slide { transition: none; transform: none; } }
+
+/* ---------- mentor mode: slide + notes side by side ---------- */
+body.mentor .slide { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 0 2rem; align-content: start; }
+body.mentor .slide > .inner { margin: 0; max-width: none; }
+.notes { display: none; }
+body.mentor .notes { display: block; position: sticky; top: 0; align-self: start; max-height: calc(100dvh - 8rem); overflow-y: auto;
+  font-family: var(--serif); font-size: 0.93rem; line-height: 1.55; color: var(--ink-2);
+  background: var(--surface); border: 1px solid var(--rule); border-left: 3px solid var(--amber); padding: 1rem 1.15rem; border-radius: 2px; }
+body.mentor .notes::before { content: "Mentor notes"; display: block; font-family: var(--sans); font-size: 0.64rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--amber); font-weight: 700; margin-bottom: 0.6rem; }
+.notes p { margin: 0 0 0.7em; }
+.notes ul { margin: 0 0 0.7em; padding-left: 1.1em; }
+.notes li { margin: 0.25em 0; }
+.notes b, .notes strong { color: var(--ink); font-weight: 650; }
+.notes .t { font-family: var(--mono); font-size: 0.78rem; color: var(--accent); }
+.notes .say { font-style: italic; }
+.notes code { font-family: var(--mono); font-size: 0.85em; background: var(--accent-soft); padding: 0.05em 0.3em; border-radius: 2px; color: var(--ink); }
+@media (max-width: 1100px) { body.mentor .slide { grid-template-columns: 1fr; } body.mentor .notes { position: static; max-height: none; } }
+
+/* ---------- type ---------- */
+.eyebrow { font-size: 0.7rem; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
+.eyebrow .num { font-family: var(--mono); color: var(--accent); letter-spacing: 0.02em; }
+h1 { font-size: clamp(2.1rem, 5.4vw, 3.5rem); line-height: 1.04; letter-spacing: -0.024em; font-weight: 680; margin: 0; text-wrap: balance; }
+h2 { font-size: clamp(1.5rem, 3.4vw, 2.15rem); line-height: 1.12; letter-spacing: -0.018em; font-weight: 660; margin: 0; text-wrap: balance; }
+h3 { font-size: 0.79rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); font-weight: 650; margin: 0; }
+.lede { font-family: var(--serif); font-size: clamp(1.02rem, 1.9vw, 1.2rem); line-height: 1.5; color: var(--ink-2); max-width: 52ch; margin: 0; }
+.check { font-family: var(--serif); font-style: italic; font-size: 0.94rem; line-height: 1.45; color: var(--ink-2); border-left: 2px solid var(--accent); padding-left: 0.85rem; max-width: 64ch; margin: 0; }
+.prompt { font-family: var(--serif); font-size: 1.05rem; line-height: 1.5; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-left: 3px solid var(--accent); padding: 0.9rem 1.1rem; margin: 0; max-width: 70ch; }
+.prompt::before { content: "Interviewer"; display: block; font-family: var(--sans); font-style: normal; font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 0.35rem; }
+
+/* ---------- question list ---------- */
+.qs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1.05rem; }
+.qs > li { display: flex; flex-direction: column; gap: 0.4rem; padding-bottom: 1.05rem; border-bottom: 1px solid var(--rule-2); }
+.qs > li:last-child { border-bottom: none; padding-bottom: 0; }
+.q { font-family: var(--mono); font-size: 0.92rem; line-height: 1.45; color: var(--ink); }
+.q::before { content: "Q "; color: var(--ink-3); }
+.a { font-size: 0.9rem; line-height: 1.55; color: var(--ink-2); margin: 0; max-width: 72ch; }
+.a b { color: var(--ink); font-weight: 620; }
+.a code, .plain code, td code, .lede code { font-family: var(--mono); font-size: 0.86em; color: var(--ink); }
+
+/* answers hidden until revealed (student build) */
+body.student .qs > li.masked { cursor: pointer; }
+body.student .qs > li.masked .a, body.student .qs > li.masked .reveal { display: none; }
+body.student .qs > li.masked .q::after { content: "  · click or press A"; color: var(--ink-3); font-size: 0.72rem; letter-spacing: 0.04em; }
+body.student .reveal.masked { display: none; }
+body.student .reveal-hint { cursor: pointer; }
+
+.tag { align-self: flex-start; font-size: 0.64rem; letter-spacing: 0.09em; text-transform: uppercase; font-weight: 650; padding: 0.16rem 0.42rem; border-radius: 2px; background: var(--accent-soft); color: var(--accent); }
+.tag.lvl-e { background: var(--accent-soft); color: var(--accent); }
+.tag.lvl-m { background: var(--amber-soft); color: var(--amber); }
+.tag.lvl-h { background: var(--surface); color: var(--red); border: 1px solid var(--rule); }
+
+/* ---------- code ---------- */
+.code { background: var(--surface); border: 1px solid var(--rule); padding: 0.95rem 1.05rem; overflow-x: auto; font-family: var(--mono);
+  font-size: 0.82rem; line-height: 1.58; white-space: pre; color: var(--ink); margin: 0; tab-size: 2; }
+.code .cm { color: var(--ink-3); }
+.code .kw { color: var(--accent); }
+.code[data-lang]::before { content: attr(data-lang); display: block; font-family: var(--sans); font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 0.55rem; }
+.out { font-family: var(--mono); font-size: 0.95rem; color: var(--ink); letter-spacing: 0.06em; }
+.out b { color: var(--accent); font-weight: 640; }
+
+/* ---------- grids ---------- */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1.4rem 2.25rem; }
+.cols.two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+.stack { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+.plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; line-height: 1.5; color: var(--ink-2); }
+.plain li { padding-left: 0.9rem; position: relative; }
+.plain li::before { content: "*"; position: absolute; left: 0; color: var(--ink-3); }
+.plain b { color: var(--ink); font-weight: 620; }
+.flag-red li::before { content: "\00d7"; color: var(--red); }
+.flag-green li::before { content: "\2713"; color: var(--green); }
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.92rem; line-height: 1.5; color: var(--ink-2); }
+.steps li { counter-increment: s; padding-left: 2.1rem; position: relative; }
+.steps li::before { content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: 0.1rem; font-family: var(--mono); font-size: 0.78rem; color: var(--accent); }
+.steps b { color: var(--ink); font-weight: 620; }
+
+/* ---------- agenda ---------- */
+.agenda { display: flex; flex-direction: column; border-top: 1px solid var(--rule-2); }
+.agenda-row { display: grid; grid-template-columns: 4.5rem 1fr auto; gap: 1rem; align-items: baseline; padding: 0.55rem 0; border-bottom: 1px solid var(--rule-2); font-size: 0.92rem; }
+.agenda-row .t { font-family: var(--mono); font-size: 0.8rem; color: var(--accent); font-variant-numeric: tabular-nums; }
+.agenda-row .w { color: var(--ink); }
+.agenda-row .d { color: var(--ink-3); font-size: 0.8rem; text-align: right; }
+.agenda-row.break .w { color: var(--ink-3); font-style: italic; }
+
+/* ---------- table ---------- */
+.tblwrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; min-width: 34rem; }
+th, td { text-align: left; padding: 0.58rem 0.9rem 0.58rem 0; border-bottom: 1px solid var(--rule-2); vertical-align: top; line-height: 1.45; }
+th { font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); font-weight: 650; white-space: nowrap; }
+td:first-child { font-family: var(--mono); color: var(--ink); white-space: nowrap; font-size: 0.82rem; }
+td { color: var(--ink-2); }
+td b { color: var(--ink); font-weight: 620; }
+
+/* ---------- UML class cards ---------- */
+.uml { display: grid; grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr)); gap: 0.8rem; }
+.cls { background: var(--surface); border: 1px solid var(--rule); border-radius: 2px; font-family: var(--mono); font-size: 0.74rem; line-height: 1.5; min-width: 0; }
+.cls .nm { padding: 0.45rem 0.7rem; border-bottom: 1px solid var(--rule-2); font-weight: 650; color: var(--ink); font-size: 0.8rem; text-align: center; }
+.cls .nm i { display: block; font-style: normal; font-weight: 500; font-size: 0.64rem; color: var(--ink-3); letter-spacing: 0.06em; }
+.cls .nm.abs { font-style: italic; }
+.cls .nm.if { color: var(--accent); }
+.cls .f, .cls .m { padding: 0.4rem 0.7rem; color: var(--ink-2); white-space: pre; overflow-x: auto; }
+.cls .f { border-bottom: 1px solid var(--rule-2); }
+.cls .m { color: var(--ink); }
+.rel { font-family: var(--mono); font-size: 0.78rem; line-height: 1.7; color: var(--ink-2); margin: 0; padding: 0; list-style: none; columns: 2; column-gap: 2rem; }
+.rel li { break-inside: avoid; }
+.rel b { color: var(--accent); font-weight: 600; }
+@media (max-width: 720px) { .rel { columns: 1; } }
+
+/* ---------- pills / badges ---------- */
+.pills { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.pill { font-family: var(--mono); font-size: 0.72rem; padding: 0.22rem 0.55rem; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink-2); background: var(--surface); }
+.pill.on { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- title slide ---------- */
+.title-slide .inner { gap: 1.15rem; justify-content: center; min-height: 100%; }
+.rule { width: 3.5rem; height: 2px; background: var(--accent); border: none; margin: 0.4rem 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 0.5rem 1.4rem; font-family: var(--mono); font-size: 0.78rem; color: var(--ink-3); margin-top: 0.6rem; }
+.section-slide .inner { justify-content: center; min-height: 100%; gap: 1rem; }
+.section-slide .big { font-family: var(--mono); font-size: 0.8rem; color: var(--accent); letter-spacing: 0.1em; }
+
+/* ---------- nav ---------- */
+.nav { display: flex; align-items: center; gap: 0.4rem; }
+button.nb { font: inherit; font-size: 0.72rem; letter-spacing: 0.09em; text-transform: uppercase; background: none; border: 1px solid var(--rule); color: var(--ink-2); padding: 0.32rem 0.62rem; border-radius: 2px; cursor: pointer; }
+button.nb:hover { border-color: var(--accent); color: var(--accent); }
+button.nb:disabled { opacity: 0.35; cursor: default; }
+button.nb:disabled:hover { border-color: var(--rule); color: var(--ink-2); }
+button.nb:focus-visible, .deck :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.counter { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-2); letter-spacing: 0.04em; }
+.progress { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent); transition: width 200ms ease; }
+@media (prefers-reduced-motion: reduce) { .progress { transition: none; } }
+.hint { color: var(--ink-3); }
+@media (max-width: 640px) { .hint, .topbar .brand { display: none; } .agenda-row { grid-template-columns: 3.6rem 1fr; } .agenda-row .d { display: none; } }
+@media print {
+  .topbar, .botbar, .progress { display: none; }
+  .stage { overflow: visible; }
+  .slide { position: static; opacity: 1; visibility: visible; transform: none; page-break-after: always; padding: 1.5rem; }
+  body.student .qs > li.masked .a { display: block; }
+}
+
+/* ---------- wrap instead of clip inside multi-column layouts ---------- */
+.cols .code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.78rem; }
+body.mentor .code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.76rem; }
+.cls .f, .cls .m { white-space: pre-wrap; overflow-wrap: anywhere; }
+body.mentor .slide { grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); }
+
+/* ---------- mentor-only blocks (stripped from the student build) ---------- */
+.mo { border-left: 2px solid var(--amber); padding-left: 1rem; display: flex; flex-direction: column; gap: 1rem; position: relative; }
+.mo::before { content: "mentor only"; font-family: var(--sans); font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber); font-weight: 700; }
+.req { font-family: var(--mono); font-size: 0.72rem; color: var(--accent); background: var(--accent-soft); padding: 0.1rem 0.4rem; border-radius: 2px; margin-right: 0.3rem; }
+.mermaid { background: var(--surface); border: 1px solid var(--rule); padding: 0.75rem; overflow-x: auto; display: flex; justify-content: center; }
+.mermaid svg { max-width: 100%; height: auto; }
+.cols .code, body.mentor .code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.78rem; }
+body.mentor .code { font-size: 0.76rem; }
+.cls .f, .cls .m { white-space: pre-wrap; overflow-wrap: anywhere; }
+body.mentor .slide { grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); }
+body.student .qs > li.masked .q::after { content: none; }
+.commit { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-2); background: var(--surface); border: 1px solid var(--rule); padding: 0.5rem 0.8rem; margin: 0; }
+.commit b { color: var(--accent); font-weight: 600; }
+
+</style>
+</head>
+<body class="student">
+<div class="deck">
+  <div class="topbar"><span class="brand">Node.js Backend Track · LLD Case Study · Amazon Locker Service</span><span class="clock" id="clock">00:00</span></div>
+  <div class="stage" id="stage">
+    <!-- 1 · title -->
+    <section class="slide title-slide active" data-min="0">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">LLD module · wrap-up</span><span>One case study, run as a real LLD interview</span></div>
+        <h1>The Amazon Locker service</h1>
+        <hr class="rule">
+        <p class="lede">A low-level design interview, start to finish, on one problem: requirements, clarifying questions, entities, diagrams, then the code, one commit per design decision. At the end, the LLD questions interviewers actually ask.</p>
+        <div class="meta"><span>120 minutes</span><span>12 requirements</span><span>4 diagram types</span><span>9 commits</span><span>25 interview questions</span></div>
+      </div>
+    </section>
+
+    <!-- 2 · agenda -->
+    <section class="slide" data-min="0">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:00</span><span>The two hours</span></div>
+        <h2>How an LLD round runs, stretched to two hours</h2>
+        <div class="agenda">
+          <div class="agenda-row"><span class="t">00:00</span><span class="w">Problem definition. What the interviewer expects from you.</span><span class="d">5 min</span></div>
+          <div class="agenda-row"><span class="t">00:05</span><span class="w">Clarifying questions: locker size, selection, status, returns</span><span class="d">10 min</span></div>
+          <div class="agenda-row"><span class="t">00:15</span><span class="w">Requirements R1 to R12</span><span class="d">7 min</span></div>
+          <div class="agenda-row"><span class="t">00:22</span><span class="w">Use case diagram</span><span class="d">5 min</span></div>
+          <div class="agenda-row"><span class="t">00:27</span><span class="w">Bottom-up: entities, responsibilities, class diagram</span><span class="d">15 min</span></div>
+          <div class="agenda-row"><span class="t">00:42</span><span class="w">Sequence diagrams: delivery, pickup, return</span><span class="d">10 min</span></div>
+          <div class="agenda-row"><span class="t">00:52</span><span class="w">Activity and state diagrams: pickup and expiry</span><span class="d">6 min</span></div>
+          <div class="agenda-row"><span class="t">00:58</span><span class="w">Code, commit by commit: steps 1 to 5 (model, location, atomic assignment)</span><span class="d">20 min</span></div>
+          <div class="agenda-row"><span class="t">01:18</span><span class="w">Code, commit by commit: steps 6 to 9 (codes, state machine, flows, returns, tests)</span><span class="d">20 min</span></div>
+          <div class="agenda-row"><span class="t">01:38</span><span class="w">Design patterns used, and the SOLID justification for each</span><span class="d">5 min</span></div>
+          <div class="agenda-row"><span class="t">01:43</span><span class="w">Most-asked LLD interview questions</span><span class="d">15 min</span></div>
+          <div class="agenda-row"><span class="t">01:58</span><span class="w">Close</span><span class="d">2 min</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 · problem -->
+    <section class="slide" data-min="0">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:00</span><span>Problem definition</span></div>
+        <h2>Amazon Locker</h2>
+        <p class="prompt">Amazon is an online retailer that allows customers to order products for delivery. Sometimes customers are unavailable at their usual address to receive packages. In such cases, Amazon provides a secure, automated pickup and return service called Amazon Locker.<br><br>Amazon Lockers are available at various locations, each containing multiple lockers of different sizes and operating hours. Customers can select a nearby locker location for delivery or returns. Only packages that fit a locker's size are eligible. When a package arrives, the customer receives a unique code to retrieve it. Packages are stored for a limited period; if uncollected, they are removed, and the customer may be refunded. Customers can also return eligible products by dropping them off at available locker locations, where the logistics team picks them up.</p>
+        <div class="cols two">
+          <div class="stack">
+            <h3>What makes it interesting</h3>
+            <ul class="plain">
+              <li>Real-time resource allocation: lockers are scarce and physical</li>
+              <li>Concurrent requests for the same locker</li>
+              <li>Operating-hour constraints on top of a time limit</li>
+              <li>Physical sizes: packages must fit lockers</li>
+              <li>Two flows sharing one resource: delivery and return</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <h3>You will be asked to</h3>
+            <ul class="plain">
+              <li>Assign lockers to orders and returns by size and availability</li>
+              <li>Handle pickups, returns and uncollected items</li>
+              <li>Manage locker states, codes and access windows</li>
+              <li>Make it work reliably and securely at scale</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 · expectations -->
+    <section class="slide" data-min="3">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:03</span><span>Expectations from the interviewee</span></div>
+        <h2>What the interviewer wants to hear</h2>
+        <div class="cols two">
+          <div class="stack">
+            <h3>In the interview, you are expected to</h3>
+            <ol class="steps">
+              <li><b>Clarify</b> requirements, constraints and edge cases by asking relevant questions.</li>
+              <li><b>Identify and design</b> the core components.</li>
+              <li><b>Justify</b> every decision with OOD and SOLID principles.</li>
+            </ol>
+            <h3>The four areas you must probe</h3>
+            <ul class="plain">
+              <li><b>Locker size</b>: sizes, package fit, restrictions</li>
+              <li><b>Locker selection</b>: who chooses, how two customers never share one, two orders at once</li>
+              <li><b>Locker status</b>: time limit, what happens after it</li>
+              <li><b>Returning an item</b>: allowed? same locker? how assigned?</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <h3>How you're scored</h3>
+            <ul class="plain">
+              <li><b>Scoping</b> before designing</li>
+              <li><b>Decomposition</b>: entities you can name in one phrase</li>
+              <li><b>Responsibility placement</b>: behaviour next to the data it protects</li>
+              <li><b>Extensibility</b>: a new rule is a new class, not five edited ifs</li>
+              <li><b>Patterns with a reason</b>, including choosing not to use one</li>
+              <li><b>Failure thinking</b>: full location, wrong code, two customers, expired</li>
+              <li><b>Communication</b>: narrate, draw, invite pushback</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 · clarifying questions -->
+    <section class="slide" data-min="5">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:05</span><span>Clarifying questions</span></div>
+        <h2>The questions, and what they buy you</h2>
+        <ul class="qs">
+          <li><span class="q">Are there different locker sizes? How does package size affect assignment? Restrictions on what can be stored?</span></li>
+          <li><span class="q">Will the customer choose the locker, or does the system assign one by availability?</span></li>
+          <li><span class="q">How will the system ensure two customers don't get the same locker?</span></li>
+          <li><span class="q">Can a customer get two lockers for different orders at the same time? Does one order ever need two lockers?</span></li>
+          <li><span class="q">Is there a time constraint? What happens if the customer doesn't come?</span></li>
+          <li><span class="q">Can the customer return an item through a locker? Same locker? How is it assigned?</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 6 · requirements -->
+    <section class="slide" data-min="15">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:15</span><span>Requirements</span></div>
+        <h2>R1 to R12</h2>
+        <div class="tblwrap">
+          <table>
+            <thead><tr><th>Req</th><th>Requirement</th></tr></thead>
+            <tbody>
+              <tr><td>R1</td><td>Customers select a preferred locker location for pickup during checkout.</td></tr>
+              <tr><td>R2</td><td>An order has one or more items; items are packaged together where locker sizes allow.</td></tr>
+              <tr><td>R3</td><td>Locations contain lockers of six sizes: XS, S, M, L, XL, XXL.</td></tr>
+              <tr><td>R4</td><td>Only packages that fit fully inside a locker's interior are eligible.</td></tr>
+              <tr><td>R5</td><td>On delivery the customer receives a unique 6-digit code to open the locker.</td></tr>
+              <tr><td>R6</td><td>Packages are held for three days.</td></tr>
+              <tr><td>R7</td><td>Pickup must happen within the 3-day window and the location's operating hours.</td></tr>
+              <tr><td>R8</td><td>Uncollected after three days: removed, locker released, customer refunded.</td></tr>
+              <tr><td>R9</td><td>Each locker is assigned to one customer/package at a time.</td></tr>
+              <tr><td>R10</td><td>After collection the locker is locked and the code is invalidated, never reused.</td></tr>
+              <tr><td>R11</td><td>Returns: choose a location, get a locker by size, receive a new code to drop the item.</td></tr>
+              <tr><td>R12</td><td>Logistics collects returns with its own code; customer notified; refund per product eligibility.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="check">Every design decision from here on is traced back to one of these labels. If a class doesn't serve an R, ask why it exists.</p>
+      </div>
+    </section>
+
+    <!-- 7 · use case -->
+    <section class="slide" data-min="22">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:22</span><span>Use case diagram</span></div>
+        <h2>Four actors, nine use cases</h2>
+        <pre class="mermaid">flowchart LR
+  customer([Customer])
+  carrier([Delivery carrier])
+  logistics([Logistics team])
+  clock([Scheduler])
+  subgraph system[Amazon Locker Service]
+    uc1(Select locker location at checkout)
+    uc2(Assign locker to package)
+    uc3(Deliver package, issue code)
+    uc4(Pick up package with code)
+    uc5(Expire uncollected package, refund)
+    uc6(Request return, get drop code)
+    uc7(Drop return in locker)
+    uc8(Collect return, process refund)
+    uc9(Notify customer)
+  end
+  customer --&gt; uc1
+  uc1 -.includes.-&gt; uc2
+  carrier --&gt; uc3
+  uc3 -.includes.-&gt; uc9
+  customer --&gt; uc4
+  clock --&gt; uc5
+  uc5 -.includes.-&gt; uc9
+  customer --&gt; uc6
+  uc6 -.includes.-&gt; uc2
+  customer --&gt; uc7
+  logistics --&gt; uc8
+  uc8 -.includes.-&gt; uc9</pre>
+      </div>
+    </section>
+
+    <!-- 8 · entities -->
+    <section class="slide" data-min="27">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:27</span><span>Design approach: bottom-up</span></div>
+        <h2>Entities first, then the flows over them</h2>
+        <div class="cols two">
+          <div class="stack">
+            <h3>Core entities</h3>
+            <ul class="plain">
+              <li><b>LockerLocation</b> · a place with lockers and opening hours</li>
+              <li><b>Locker</b> · one door, one size, one state</li>
+              <li><b>Customer, Item, Order</b> · what was bought and where it should go</li>
+              <li><b>Package</b> · items boxed together; the thing that has to fit</li>
+              <li><b>LockerPackage</b> · a package's stay in a locker: code, deadline, status</li>
+              <li><b>ReturnPackage</b> · an item's way back: two codes, two actors</li>
+              <li><b>AccessCode</b> · 6 digits, valid until, single use</li>
+              <li><b>LockerService</b> · the flows</li>
+            </ul>
+          </div>
+        </div>
+        <p class="check">Bottom-up means: get the nouns and their invariants right, and the flows become short.</p>
+      </div>
+    </section>
+
+    <!-- 9 · class diagram -->
+    <section class="slide" data-min="35">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:35</span><span>Class diagram</span></div>
+        <h2>The core model</h2>
+        <pre class="mermaid">classDiagram
+  direction LR
+  class LockerLocation { +hours +lockers +isOpenAt(when) }
+  class Locker { +size +state +version }
+  class Order { +customer +items +lockerLocationId }
+  class Package { +items +dimensions }
+  class LockerPackage { -code +deliver() +pickUp(code) +expire() }
+  class ReturnPackage { -customerCode -logisticsCode +drop(code) +collect(code) }
+  class LockerService { +assignLockers() +deliver() +pickUp() +processExpired() +requestReturn() }
+  LockerLocation *-- Locker
+  Order --&gt; Package : packed into
+  LockerPackage --&gt; Package
+  LockerPackage ..&gt; Locker
+  ReturnPackage ..&gt; Locker
+  LockerService ..&gt; LockerPackage
+  LockerService ..&gt; ReturnPackage</pre>
+      </div>
+    </section>
+
+    <!-- 10 · sequence delivery -->
+    <section class="slide" data-min="42">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:42</span><span>Sequence diagram · delivery</span></div>
+        <h2>From checkout to the code in the customer's inbox</h2>
+        <pre class="mermaid">sequenceDiagram
+  participant F as Fulfilment
+  participant S as LockerService
+  participant R as LockerRepository
+  participant C as Carrier
+  participant Cu as Customer
+  F-&gt;&gt;S: assignLockers(order)
+  S-&gt;&gt;R: book(locker) — atomic
+  S--&gt;&gt;F: locker BOOKED
+  C-&gt;&gt;S: deliver(package)
+  S-&gt;&gt;S: issue 6-digit code, valid 3 days
+  S--&gt;&gt;Cu: email: locker + code</pre>
+      </div>
+    </section>
+
+    <!-- 11 · sequence pickup + return -->
+    <section class="slide" data-min="46">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:46</span><span>Sequence diagrams · pickup and return</span></div>
+        <h2>Pickup: hours, code, release</h2>
+        <pre class="mermaid">sequenceDiagram
+  autonumber
+  participant Cu as Customer (kiosk)
+  participant S as LockerService
+  participant L as LockerLocation
+  participant PR as LockerPackageRepository
+  participant LP as LockerPackage
+  participant R as LockerRepository
+  participant E as LockerEvents
+  Cu-&gt;&gt;S: pickUp(location, code)
+  S-&gt;&gt;L: isOpenAt(now)? (R7)
+  alt closed
+    S--&gt;&gt;Cu: LocationClosedError
+  end
+  S-&gt;&gt;PR: findDelivered(location)
+  S-&gt;&gt;S: find package whose code matches (constant time)
+  alt no match
+    S--&gt;&gt;Cu: InvalidCodeError
+  end
+  S-&gt;&gt;LP: pickUp(code, now)  %% state DELIVERED → PICKED_UP, code destroyed (R10)
+  S-&gt;&gt;R: release(lockerId)  %% locker AVAILABLE again
+  S-&gt;&gt;E: emit PackagePickedUp
+  S--&gt;&gt;Cu: door opens</pre>
+      </div>
+    </section>
+
+    <!-- 12 · activity + state -->
+    <section class="slide" data-min="52">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:52</span><span>Activity diagram · pickup and expiry</span></div>
+        <h2>What happens to a delivered package</h2>
+        <pre class="mermaid">flowchart TD
+  start([Package delivered, code issued]) --&gt; wait{Customer arrives?}
+  wait -- "within 3 days" --&gt; open{Location open now?}
+  open -- no --&gt; closed[Show opening hours] --&gt; wait
+  open -- yes --&gt; code[Customer enters 6-digit code]
+  code --&gt; valid{Code matches a DELIVERED package&lt;br/&gt;and validTill not passed?}
+  valid -- no --&gt; reject[Reject, no hint which packages exist] --&gt; code
+  valid -- yes --&gt; pick[Package → PICKED_UP&lt;br/&gt;code destroyed]
+  pick --&gt; release[Locker → AVAILABLE] --&gt; notify1[Notify: collected] --&gt; done([End])
+  wait -- "3 days pass" --&gt; expire[Scheduler: package → EXPIRED]
+  expire --&gt; remove[Logistics removes package → REMOVED]
+  remove --&gt; release2[Locker → AVAILABLE] --&gt; refund[Refund customer] --&gt; notify2[Notify: returned and refunded] --&gt; done</pre>
+      </div>
+    </section>
+
+
+    <!-- 14 · code intro -->
+    <section class="slide" data-min="58">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">00:58</span><span>The code, commit by commit</span></div>
+        <h2>Nine commits. Each one is a design decision you could defend.</h2>
+        <div class="cols two">
+          <div class="stack">
+<pre class="code" data-lang="$ git log --oneline --reverse">step 1: project setup, problem definition and requirements R1-R12
+step 2: LockerSize with interior dimensions, LockerState, Dimensions value object (R3, R4)
+step 3: Customer, Item, Order, Package and PackagingService (R1, R2, R4)
+step 4: Locker, OperatingHours, LockerLocation with a Builder (R3, R7, R9)
+step 5: LockerRepository with atomic book(), assignment strategy, race demo (R4, R9)
+step 6: AccessCode and the LockerPackage state machine (R5, R6, R10)
+step 7: delivery flow: LockerService, notifications as observers, clock, demo (R5-R8, R10)
+step 8: <span class="kw">return</span> flow: ReturnPackage, two codes, refund per product (R11, R12)
+step 9: tests <span class="kw">for</span> assignment, packaging, concurrency and every service flow</pre>
+          </div>
+          <div class="stack">
+            <h3>Follow along</h3>
+<pre class="code" data-lang="bash">git clone https:<span class="cm">//github.com/nahaktarun/amazon-locker-lld</span>
+cd amazon-locker-lld &amp;&amp; npm install
+git checkout step-05      # any step; tags step-01 … step-09
+npm run race              # step 5 onward
+npm run demo              # step 7 onward
+npm test                  # step 6 onward</pre>
+            <p class="check">In a real interview you'd write a fraction of this. The commits show the order of decisions, which is what the interviewer is actually grading.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 15 · steps 1-2 -->
+    <section class="slide" data-min="60">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:00</span><span>Steps 1 and 2 · <span class="req">R3</span><span class="req">R4</span></span></div>
+        <h2>Sizes, states, and a value object that knows about rotation</h2>
+        <p class="commit"><b>step 2</b> LockerSize with interior dimensions, LockerState, Dimensions value object</p>
+        <ul class="plain">
+          <li>Six sizes in ascending order, each with interior dimensions, so "smallest that fits" is a scan.</li>
+          <li>Four locker states: AVAILABLE, BOOKED, OCCUPIED, OUT_OF_SERVICE.</li>
+          <li><code>Dimensions.fitsIn()</code> owns the rule "fits fully inside", in any orientation.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 16 · step 3 -->
+    <section class="slide" data-min="64">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:04</span><span>Step 3 · <span class="req">R1</span><span class="req">R2</span><span class="req">R4</span></span></div>
+        <h2>Order, Package, and who decides what goes in a box</h2>
+        <p class="commit"><b>step 3</b> Customer, Item, Order, Package and PackagingService</p>
+        <ul class="plain">
+          <li>The order carries the locker location chosen at checkout.</li>
+          <li>A Package is items boxed together with dimensions of its own; the box is what has to fit.</li>
+          <li>PackagingService turns an order into packages and rejects an item that fits no locker at all.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 17 · step 4 -->
+    <section class="slide" data-min="68">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:08</span><span>Step 4 · <span class="req">R3</span><span class="req">R7</span><span class="req">R9</span></span></div>
+        <h2>A locker is a row. A location is built, not constructed.</h2>
+        <p class="commit"><b>step 4</b> Locker, OperatingHours, LockerLocation with a Builder</p>
+        <ul class="plain">
+          <li>Locker: id, size, state, what it's assigned to, and a version number.</li>
+          <li>OperatingHours answers one question: is it open at this time?</li>
+          <li>LockerLocation is created through a Builder; a location without lockers or a name cannot exist.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 18 · step 5 -->
+    <section class="slide" data-min="72">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:12</span><span>Step 5 · <span class="req">R4</span><span class="req">R9</span></span></div>
+        <h2>Two customers, one locker, the same instant</h2>
+        <p class="commit"><b>step 5</b> LockerRepository with atomic book(), assignment strategy, race demo</p>
+        <div class="cols two">
+          <div class="stack">
+<pre class="code" data-lang="$ npm run race">NAIVE   findAvailable → <span class="kw">await</span> → save
+  A booked L1-M-1
+  B booked L1-M-1
+  locker L1-M-1 is BOOKED, assigned to LP-B
+
+ATOMIC  rank → compare-and-set book()
+  A booked L1-M-1
+  B rejected: No available locker at L1 fits a 40x30x20 cm package
+  locker L1-M-1 is BOOKED, assigned to LP-A</pre>
+          </div>
+          <div class="stack">
+            <ul class="plain">
+              <li>The strategy ranks the available lockers that fit: smallest first.</li>
+              <li>The repository's <code>book()</code> succeeds only if the locker is still AVAILABLE at the version we read.</li>
+              <li>The assigner tries each candidate until one booking succeeds.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 19 · step 6 -->
+    <section class="slide" data-min="78">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:18</span><span>Step 6 · <span class="req">R5</span><span class="req">R6</span><span class="req">R10</span></span></div>
+        <h2>A code that expires, a package that knows what's legal</h2>
+        <p class="commit"><b>step 6</b> AccessCode and the LockerPackage state machine</p>
+        <ul class="plain">
+          <li>AccessCode: 6 digits from a secure random source, valid until a date, compared in constant time.</li>
+          <li>LockerPackage moves BOOKED → DELIVERED → PICKED_UP, or DELIVERED → EXPIRED → REMOVED. Each state is a class.</li>
+          <li>Pickup with the right code destroys the code. It cannot be reused.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 20 · step 7 -->
+    <section class="slide" data-min="84">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:24</span><span>Step 7 · <span class="req">R5</span><span class="req">R6</span><span class="req">R7</span><span class="req">R8</span><span class="req">R10</span></span></div>
+        <h2>The delivery flow, end to end</h2>
+        <p class="commit"><b>step 7</b> delivery flow: LockerService, notifications as observers, clock, demo</p>
+        <ul class="plain">
+          <li>LockerService sequences: assign lockers → deliver → pick up → process expired.</li>
+          <li>Time comes from an injected Clock, so three days can be tested.</li>
+          <li>The service emits events; a CustomerNotifier turns them into emails. The service never mentions email.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 21 · step 8 -->
+    <section class="slide" data-min="90">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:30</span><span>Step 8 · <span class="req">R11</span><span class="req">R12</span></span></div>
+        <h2>Returns: the same shape, roles swapped, nothing else touched</h2>
+        <p class="commit"><b>step 8</b> return flow: ReturnPackage, two codes, refund per product</p>
+        <ul class="plain">
+          <li>The customer's code opens the locker to drop the item. It dies on use; a logistics code is born.</li>
+          <li>Logistics collects with its own code. The locker is released; the refund follows the product's eligibility.</li>
+          <li>The delivery flow did not change. The assigner, repository, codes and events were reused as they were.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 22 · step 9 -->
+    <section class="slide" data-min="94">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:34</span><span>Step 9 · tests</span></div>
+        <h2>Thirteen tests, no framework, every dependency a fake</h2>
+        <p class="commit"><b>step 9</b> tests for assignment, packaging, concurrency and every service flow</p>
+        <div class="cols two">
+          <div class="stack">
+<pre class="code" data-lang="$ npm test">✔ R5/R10: booked → delivered issues a code; pickup clears it; cannot be reused
+✔ wrong code is rejected without changing state
+✔ R6/R8: valid until exactly three days; expiry illegal before, legal at the boundary
+✔ R4: dimensions fit in any orientation
+✔ R4: smallest-fit ranks the smallest locker the package fits first
+✔ R9: two concurrent assignments <span class="kw">for</span> the last fitting locker: exactly one wins
+✔ a small package falls through to a bigger locker when the small one is taken
+✔ R2: items are boxed together when they fit; a box never exceeds the largest locker
+✔ R1-R5: order → packed → locker booked → delivered → customer emailed the code
+✔ R7/R10: pickup only in opening hours; code single-use; locker released
+✔ R6/R8: after three days: removed, locker released, customer refunded
+✔ R11/R12: <span class="kw">return</span> uses two codes; refund follows product eligibility
+✔ an order needing two lockers when only one fits is rolled back entirely
+ℹ tests 13  pass 13  fail 0</pre>
+          </div>
+          <div class="stack">
+            <ul class="plain">
+              <li>Test names carry the requirement label. The suite is the requirements, executable.</li>
+              <li>FixedClock, FixedCodeGenerator, RecordingChannel: the three fakes that make time, randomness and email testable.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 23 · patterns -->
+    <section class="slide" data-min="98">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:38</span><span>Design patterns and SOLID</span></div>
+        <h2>Name the pattern, then the requirement that forced it</h2>
+        <div class="tblwrap">
+          <table>
+            <thead><tr><th>Pattern</th><th>Where</th><th>Forced by</th></tr></thead>
+            <tbody>
+              <tr><td>Builder</td><td><code>LockerLocation.builder()</code></td><td>R3: six sizes, counts, hours; validated once</td></tr>
+              <tr><td>State</td><td><code>LockerPackage</code> states</td><td>R5, R6, R8, R10: five statuses, four actions</td></tr>
+              <tr><td>Strategy</td><td><code>LockerAssignmentStrategy</code>, <code>CodeGenerator</code></td><td>R4: which fitting locker; tests need fixed codes</td></tr>
+              <tr><td>Repository</td><td><code>LockerRepository.book()</code></td><td>R9: one locker, one customer, atomically</td></tr>
+              <tr><td>Observer</td><td><code>LockerEvents</code> → <code>CustomerNotifier</code></td><td>R5, R8, R12: notify without coupling</td></tr>
+              <tr><td>Adapter</td><td><code>NotificationChannel</code></td><td>email today, SMS tomorrow, a fake in tests</td></tr>
+              <tr><td>Facade</td><td><code>LockerService</code></td><td>one entry point for four actors</td></tr>
+              <tr><td>Value object</td><td><code>Dimensions</code>, <code>AccessCode</code></td><td>R4 rotation; R5/R10 validity and matching</td></tr>
+              <tr><td>Singleton</td><td>not used</td><td>the textbook answer for LockerService</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="check">A pattern with no requirement attached is a definition. Nine patterns with a reason each is a design.</p>
+      </div>
+    </section>
+
+    <!-- 24 · interview questions A -->
+    <section class="slide" data-min="103">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:43</span><span>Most-asked LLD interview questions · general</span></div>
+        <h2>The questions every LLD round asks, in some form</h2>
+        <ul class="qs">
+          <li><span class="q">1 · What is the difference between LLD and HLD? Which one are we doing when we argue about class names?</span></li>
+          <li><span class="q">2 · Explain SOLID with one violation each from real code.</span></li>
+          <li><span class="q">3 · Composition vs inheritance: when is inheritance right?</span></li>
+          <li><span class="q">4 · Strategy vs State. They look identical.</span></li>
+          <li><span class="q">5 · Adapter vs Facade vs Decorator vs Proxy.</span></li>
+          <li><span class="q">6 · Why "favour composition", why "program to an interface", why "dependency injection"? In one breath.</span></li>
+          <li><span class="q">7 · What is the Law of Demeter, and is <code>order.customer.email</code> a violation?</span></li>
+          <li><span class="q">8 · Singleton: why is it the pattern everyone has used and nobody defends?</span></li>
+          <li><span class="q">9 · When is DRY wrong?</span></li>
+          <li><span class="q">10 · How do you handle concurrency in an LLD? Node is single-threaded.</span></li>
+          <li><span class="q">11 · What is an anemic domain model, and how do you fix one?</span></li>
+          <li><span class="q">12 · How do you make time testable?</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 25 · interview questions B -->
+    <section class="slide" data-min="108">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:48</span><span>Most-asked LLD interview questions · on this design</span></div>
+        <h2>The follow-ups you'll get on the Amazon Locker design</h2>
+        <ul class="qs">
+          <li><span class="q">13 · Walk me through everything that happens from the carrier's scan to the customer's email. Name every object in order.</span></li>
+          <li><span class="q">14 · Why isn't the code stored on the Locker?</span></li>
+          <li><span class="q">15 · Two customers type the same code at two kiosks at the same location, same second.</span></li>
+          <li><span class="q">16 · The expiry job runs on two instances at once.</span></li>
+          <li><span class="q">17 · Optimistic or pessimistic locking for locker assignment?</span></li>
+          <li><span class="q">18 · A customer wants to extend the 3-day hold. What changes?</span></li>
+          <li><span class="q">19 · The location is full when the carrier arrives, even though we booked.</span></li>
+          <li><span class="q">20 · Locker sizes differ per location, and one location adds a "cold" locker for groceries. What changes?</span></li>
+          <li><span class="q">21 · 10,000 locations. What breaks first?</span></li>
+          <li><span class="q">22 · Brute force: a million codes, one location, twenty packages.</span></li>
+          <li><span class="q">23 · Where would you put "packages over $1,000 need ID at pickup"?</span></li>
+          <li><span class="q">24 · What's the weakest part of this design?</span></li>
+          <li><span class="q">25 · What did you deliberately not build?</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 26 · close -->
+    <section class="slide title-slide" data-min="118">
+      <div class="inner">
+        <div class="eyebrow"><span class="num">01:58</span><span>Close</span></div>
+        <h1>Requirement. Decision. Alternative rejected.</h1>
+        <hr class="rule">
+        <p class="lede">Twelve requirements, nine commits, nine patterns, and each one arrived with the sentence that justifies it. That sentence is what you're being graded on. The class diagram is just where you write it down.</p>
+        <div class="cols two">
+          <div class="stack">
+            <h3>Before your interview</h3>
+            <ul class="plain">
+              <li>Narrate question 13 out loud, from memory, in under two minutes.</li>
+              <li>Draw the class diagram and the LockerPackage state diagram on paper.</li>
+              <li>Re-run <code>npm run race</code> and explain both outputs to someone who hasn't seen them.</li>
+            </ul>
+          </div>
+          <div class="stack">
+            <h3>Homework</h3>
+            <ul class="plain">
+              <li>Fork the repo. Add a version to <code>LockerPackage</code> and make pickup safe across instances (question 15). Test it.</li>
+              <li>Move interior dimensions onto the Locker row and add a "cold" locker type (question 20) without editing <code>LockerService</code>.</li>
+              <li>One commit each, message naming the requirement and the principle.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+  <div class="botbar">
+    <span class="hint">← → to move</span>
+    <span class="counter" id="counter">1 / 25</span>
+    <span class="nav"><button class="nb" id="prev" type="button" aria-label="Previous slide">Prev</button><button class="nb" id="next" type="button" aria-label="Next slide">Next</button></span>
+  </div>
+  <div class="progress" id="progress" style="width:0"></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var clock = document.getElementById('clock');
+  var prev = document.getElementById('prev');
+  var next = document.getElementById('next');
+  var i = 0;
+  var student = document.body.classList.contains('student');
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+  function render() {
+    slides.forEach(function (s, n) { s.classList.toggle('active', n === i); });
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    progress.style.width = ((i) / (slides.length - 1) * 100) + '%';
+    var m = parseInt(slides[i].dataset.min || '0', 10);
+    clock.textContent = pad(Math.floor(m / 60)) + ':' + pad(m % 60);
+    prev.disabled = i === 0;
+    next.disabled = i === slides.length - 1;
+    slides[i].scrollTop = 0;
+    if (history.replaceState) history.replaceState(null, '', '#' + (i + 1));
+  }
+
+  function go(n) { i = Math.max(0, Math.min(slides.length - 1, n)); render(); }
+
+  function revealAll() {
+    var masked = slides[i].querySelectorAll('.masked');
+    var anyMasked = masked.length > 0;
+    if (anyMasked) { masked.forEach(function (el) { el.classList.remove('masked'); }); }
+    else { slides[i].querySelectorAll('.qs > li, .reveal').forEach(function (el) { el.classList.add('masked'); }); }
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { go(i + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { go(i - 1); }
+    else if (e.key === 'Home') { go(0); }
+    else if (e.key === 'End') { go(slides.length - 1); }
+    else if (e.key === 'a' || e.key === 'A') { if (student) revealAll(); }
+    else { return; }
+    e.preventDefault();
+  });
+
+  if (student) {
+    document.querySelectorAll('.qs > li, .reveal').forEach(function (el) { el.classList.add('masked'); });
+    document.addEventListener('click', function (e) {
+      var li = e.target.closest('.qs > li.masked');
+      if (li) { li.classList.remove('masked'); return; }
+      var hint = e.target.closest('.reveal-hint');
+      if (hint) { hint.parentElement.querySelectorAll('.reveal.masked').forEach(function (el) { el.classList.remove('masked'); }); }
+    });
+  }
+
+  prev.addEventListener('click', function () { go(i - 1); });
+  next.addEventListener('click', function () { go(i + 1); });
+
+  var h = parseInt((location.hash || '').replace('#', ''), 10);
+  if (h >= 1 && h <= slides.length) i = h - 1;
+  render();
+})();
+(function () {
+  if (!window.mermaid) return;
+  var dark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+    (document.documentElement.getAttribute('data-theme') !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'neutral', securityLevel: 'loose',
+    themeVariables: dark ? { fontFamily: 'ui-sans-serif, system-ui, sans-serif', primaryColor: '#1E2833', primaryBorderColor: '#85AAD9', lineColor: '#98A1AC' }
+                         : { fontFamily: 'ui-sans-serif, system-ui, sans-serif', primaryColor: '#E7EDF6', primaryBorderColor: '#22548F', lineColor: '#58616D' } });
+  mermaid.run({ querySelector: '.mermaid' });
+})();
+
+</script>
+</body>
+</html>

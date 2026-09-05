@@ -1,0 +1,12 @@
+sequenceDiagram
+  participant F as Fulfilment
+  participant S as LockerService
+  participant R as LockerRepository
+  participant C as Carrier
+  participant Cu as Customer
+  F->>S: assignLockers(order)
+  S->>R: book(locker) — atomic
+  S-->>F: locker BOOKED
+  C->>S: deliver(package)
+  S->>S: issue 6-digit code, valid 3 days
+  S-->>Cu: email: locker + code

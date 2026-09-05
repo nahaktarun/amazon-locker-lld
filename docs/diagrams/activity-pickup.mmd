@@ -1,0 +1,12 @@
+flowchart TD
+  start([Package delivered, code issued]) --> wait{Customer arrives?}
+  wait -- "within 3 days" --> open{Location open now?}
+  open -- no --> closed[Show opening hours] --> wait
+  open -- yes --> code[Customer enters 6-digit code]
+  code --> valid{Code matches a DELIVERED package<br/>and validTill not passed?}
+  valid -- no --> reject[Reject, no hint which packages exist] --> code
+  valid -- yes --> pick[Package → PICKED_UP<br/>code destroyed]
+  pick --> release[Locker → AVAILABLE] --> notify1[Notify: collected] --> done([End])
+  wait -- "3 days pass" --> expire[Scheduler: package → EXPIRED]
+  expire --> remove[Logistics removes package → REMOVED]
+  remove --> release2[Locker → AVAILABLE] --> refund[Refund customer] --> notify2[Notify: returned and refunded] --> done

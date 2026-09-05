@@ -1,0 +1,22 @@
+sequenceDiagram
+  autonumber
+  participant Cu as Customer
+  participant S as LockerService
+  participant A as LockerAssigner
+  participant RP as ReturnPackage
+  participant R as LockerRepository
+  participant Lg as Logistics
+  participant E as LockerEvents
+  Cu->>S: requestReturn(customer, order, item, location)  (R11)
+  S->>A: assign(location, item.dims, returnId)
+  A-->>S: Locker (BOOKED)
+  S->>RP: new ReturnPackage(customerCode)
+  S->>E: emit ReturnRequested → email customer code
+  Cu->>S: dropReturn(location, customerCode)
+  S->>RP: drop(code, now)  %% customer code destroyed, logistics code issued
+  S->>R: occupy(lockerId)
+  S->>E: emit ReturnDropped
+  Lg->>S: collectReturn(location, logisticsCode)  (R12)
+  S->>RP: collect(code, now)
+  S->>R: release(lockerId)
+  S->>E: emit ReturnCollected → refund per product eligibility

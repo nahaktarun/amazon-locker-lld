@@ -1,3 +1,6 @@
 node_modules
 dist
 .DS_Store
+docs/mentor.html
+docs/src/
+docs/build.cjs
